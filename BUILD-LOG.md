@@ -1,3 +1,66 @@
+# BUILD-LOG — Step 2: 과목별 학생 명단 업로드 + 명단 기반 학생 추가
+
+**Date**: 2026-04-03
+**Builder**: Bob
+**Status**: Review fixes applied — resubmitted for review
+
+---
+
+## Files Changed
+
+| File | Action | Notes |
+|------|--------|-------|
+| `/home/blackpc/requirements.txt` | Modified | Added `xlrd` |
+| `/home/blackpc/app.py` | Modified | Added `CourseRoster` model, `student_number`/`department` on `Student`, `parse_roster_file()`, 3 new routes, updated `add_student` / `edit_student` |
+| `/home/blackpc/templates/course_detail.html` | Modified | Added "명단 업로드" and "명단에서 추가" buttons; roster count badge |
+| `/home/blackpc/templates/add_student.html` | Modified | Added optional 학번 / 계열 fields |
+| `/home/blackpc/templates/edit_student.html` | Modified | Added optional 학번 / 계열 fields |
+| `/home/blackpc/templates/upload_roster.html` | Created | File upload form with 추가/전체교체 radio; shows current roster count + initialise button |
+| `/home/blackpc/templates/add_from_roster.html` | Created | Roster table with client-side JS filter; score entry form when row selected |
+
+---
+
+## Key Decisions
+
+1. **xlrd imported at top-level**: `import xlrd` is at the top of `app.py` (not lazily inside the helper). `openpyxl` remains a lazy import inside `parse_roster_file` to match the pattern already used in `import_excel`.
+
+2. **`parse_roster_file` as module-level function**: Not a route helper or class method — keeps it testable and reusable. Raises `ValueError` for all user-facing error cases so the caller can flash the message without ever seeing a raw traceback.
+
+3. **xlrd numeric cell handling**: `xlrd` returns student numbers (e.g. `20231234`) as Python `float` values. The `_cell()` inner function converts `float` → `int` → `str` when the float has no fractional part, preserving leading-zero-free strings (student IDs are not padded in Korean systems).
+
+4. **`student_number` and `department` are nullable on Student**: Existing Step 1 student records have `NULL` for both — downstream templates handle `student.student_number or ''` correctly.
+
+5. **DB migration comment instead of Alembic**: As instructed, a plain comment near `db.create_all()` tells the operator to delete the old DB when upgrading from Step 1.
+
+6. **`add_from_roster` POST redirects on error**: On validation failure the handler redirects back to the same `?roster_id=X` URL rather than re-rendering, so the roster table stays visible and the score form re-opens for the same entry.
+
+7. **`clear_roster` accessible from `upload_roster.html`**: If the course already has a roster, the upload page shows an inline "명단 초기화" button (POST to `/course/<id>/clear_roster`) — no extra page needed.
+
+---
+
+## Review Fixes Applied (2026-04-03)
+
+### Must Fix
+
+1. **requirements.txt — xlrd unpinned** — Changed `xlrd` to `xlrd>=1.2.0,<2` to prevent pip from resolving to xlrd 2.x, which dropped `.xls` support entirely.
+
+### Should Fix
+
+2. **app.py:260 — float inf/nan crash in xlrd cell normalisation** — Added `math.isfinite(val)` guard inside `_cell()`. `inf`/`nan` values from corrupt or formula-error cells now return `''` instead of raising `OverflowError`/`ValueError`. (`import math` was already present at the top of the file.)
+
+3. **app.py:751 — Bulk DELETE bypasses ORM cascade** — Added `synchronize_session='fetch'` to `CourseRoster.query.filter_by(course_id=course_id).delete(...)`. The session identity map is now updated correctly and the pattern is safe if a child table is added later.
+
+4. **templates/upload_roster.html:59–65 — nested form bug** — Moved the "명단 초기화" `<form>` outside the upload `<form>` element. The clear-roster form is now placed after the closing `</form>` of the upload form, visually in the same card body area, resolving the invalid-HTML nesting that caused the inner submit button to trigger the outer form.
+
+---
+
+## Known Gaps / Out of Scope
+
+- No duplicate-detection when appending a roster (same student name/number already in table) — not specified in the brief.
+- No "명단에서 추가" button on the empty-course state at the bottom of `course_detail.html` (the button in the header area is already hidden when roster is empty; this matches the brief's conditional).
+
+---
+
 # BUILD-LOG — Step 1: Grade Management System Redesign
 
 **Date**: 2026-04-03

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}명단 업로드 - {{ course.name }} - 대학교 성적 관리 시스템{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7">
+
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-outline-secondary btn-sm me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h4 class="mb-0"><i class="bi bi-upload text-warning"></i> 명단 업로드</h4>
+                <small class="text-muted">{{ course.name }} — {{ course.year }}학년도 {{ course.semester }}</small>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+
+                    <div class="mb-4">
+                        <label for="roster_file" class="form-label fw-bold">
+                            명단 파일 <span class="text-danger">*</span>
+                        </label>
+                        <input type="file" class="form-control" id="roster_file" name="roster_file"
+                               accept=".xls,.xlsx" required>
+                        <div class="form-text">
+                            .xls 또는 .xlsx 파일만 업로드할 수 있습니다.<br>
+                            헤더 행에 <strong>이름</strong>(또는 name), <strong>학번</strong>(또는 student_id / student_number),
+                            <strong>계열</strong>(또는 department) 컬럼이 있어야 합니다.
+                            이름 컬럼은 필수이며, 학번·계열은 없어도 됩니다.
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">업로드 방식</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="mode" id="mode_append"
+                                   value="append" checked>
+                            <label class="form-check-label" for="mode_append">
+                                <strong>추가</strong> — 기존 명단에 덧붙입니다
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="mode" id="mode_replace"
+                                   value="replace">
+                            <label class="form-check-label" for="mode_replace">
+                                <strong>전체 교체</strong> — 기존 명단을 모두 지우고 새로 등록합니다
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> 취소
+                        </a>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="bi bi-upload"></i> 업로드
+                        </button>
+                    </div>
+
+                </form>
+
+                {% if course.roster %}
+                <div class="alert alert-info mt-3 mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    현재 등록된 명단: <strong>{{ course.roster | length }}명</strong>
+                    <form method="POST" action="{{ url_for('clear_roster', course_id=course.id) }}"
+                          class="d-inline ms-3"
+                          onsubmit="return confirm('명단 전체를 삭제하시겠습니까?')">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-trash"></i> 명단 초기화
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

@@ -15,10 +15,21 @@
             <small class="text-muted">{{ course.year }}학년도 {{ course.semester }}</small>
         </div>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
         <a href="{{ url_for('add_student', course_id=course.id) }}" class="btn btn-success btn-sm">
             <i class="bi bi-person-plus-fill"></i> 학생 추가
         </a>
+        <a href="{{ url_for('upload_roster', course_id=course.id) }}" class="btn btn-outline-warning btn-sm">
+            <i class="bi bi-upload"></i> 명단 업로드
+            {% if course.roster %}
+                <span class="badge bg-warning text-dark ms-1">{{ course.roster | length }}</span>
+            {% endif %}
+        </a>
+        {% if course.roster %}
+        <a href="{{ url_for('add_from_roster', course_id=course.id) }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-person-lines-fill"></i> 명단에서 추가
+        </a>
+        {% endif %}
         <a href="{{ url_for('bulk_add', course_id=course.id) }}" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-people-fill"></i> CSV 일괄 추가
         </a>

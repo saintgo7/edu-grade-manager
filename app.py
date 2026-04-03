@@ -4,6 +4,8 @@ import csv
 import os
 from datetime import datetime
 
+import xlrd
+
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, abort
 )
@@ -63,6 +65,8 @@ class Student(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
+    student_number = db.Column(db.String(50))   # 학번 (nullable — 명단 없이 추가 가능)
+    department = db.Column(db.String(100))       # 계열 (nullable)
     report_score = db.Column(db.Float, nullable=False)
     attendance_score = db.Column(db.Float, nullable=False)
     midterm_score = db.Column(db.Float, nullable=False)
@@ -74,6 +78,22 @@ class Student(db.Model):
 
     def __repr__(self):
         return f'<Student {self.name}>'
+
+
+class CourseRoster(db.Model):
+    """명단 — 명단 Excel에서 가져온 학생 목록. Student와 별개로 관리."""
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    department = db.Column(db.String(100))   # 계열
+    name = db.Column(db.String(100), nullable=False)  # 이름
+    student_number = db.Column(db.String(50))  # 학번
+    course = db.relationship(
+        'Course',
+        backref=db.backref('roster', lazy=True, cascade='all, delete-orphan'),
+    )
+
+    def __repr__(self):
+        return f'<CourseRoster {self.name}>'
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +190,93 @@ def _validate_policy(a_plus, a, b_plus, b, c_plus, c, d_plus, d):
     if total > 100.0 + 0.01:
         return f'학점 구간 합계가 {total:.1f}%입니다. 100% 이하여야 합니다.'
     return None
+
+
+def parse_roster_file(file_data, filename):
+    """
+    Parse a roster Excel file (.xls or .xlsx).
+
+    Returns a list of dicts with keys: department, name, student_number.
+    Raises ValueError with a user-facing message on any parsing error.
+
+    Column detection is header-name based (position-independent):
+      계열 / department   → department
+      이름 / name         → name
+      학번 / student_id / student_number → student_number
+    """
+    fname = filename.lower()
+    if fname.endswith('.xlsx'):
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(file_data), data_only=True)
+            ws = wb.active
+            rows = list(ws.iter_rows(values_only=True))
+        except Exception:
+            app.logger.exception('openpyxl parse error')
+            raise ValueError('파일을 읽는 중 오류가 발생했습니다. 올바른 .xlsx 파일인지 확인해주세요.')
+    elif fname.endswith('.xls'):
+        try:
+            wb = xlrd.open_workbook(file_contents=file_data)
+            ws = wb.sheet_by_index(0)
+            rows = [ws.row_values(r) for r in range(ws.nrows)]
+        except Exception:
+            app.logger.exception('xlrd parse error')
+            raise ValueError('파일을 읽는 중 오류가 발생했습니다. 올바른 .xls 파일인지 확인해주세요.')
+    else:
+        raise ValueError('.xlsx 또는 .xls 파일만 업로드할 수 있습니다.')
+
+    if not rows:
+        raise ValueError('파일에 데이터가 없습니다.')
+
+    # Map header names to column indices
+    header = [str(c).strip().lower() if c is not None else '' for c in rows[0]]
+    dept_idx = name_idx = num_idx = None
+    for i, h in enumerate(header):
+        if h in ('계열', 'department'):
+            dept_idx = i
+        elif h in ('이름', 'name'):
+            name_idx = i
+        elif h in ('학번', 'student_id', 'student_number'):
+            num_idx = i
+
+    if name_idx is None:
+        raise ValueError(
+            '헤더에서 이름 컬럼을 찾을 수 없습니다. '
+            '컬럼명이 "이름" 또는 "name"인지 확인해주세요.'
+        )
+
+    results = []
+    for row in rows[1:]:
+        # Skip entirely empty rows
+        if all((c is None or str(c).strip() == '') for c in row):
+            continue
+        def _cell(idx):
+            if idx is None or idx >= len(row):
+                return ''
+            val = row[idx]
+            if val is None:
+                return ''
+            # xlrd returns floats for numeric cells (e.g. student numbers)
+            if isinstance(val, float):
+                if not math.isfinite(val):
+                    str_val = ''
+                elif val == int(val):
+                    str_val = str(int(val))
+                else:
+                    str_val = str(val)
+                return str_val
+            return str(val).strip()
+
+        name = _cell(name_idx)
+        if not name:
+            continue  # skip rows with empty name
+        results.append({
+            'department': _cell(dept_idx),
+            'name': name,
+            'student_number': _cell(num_idx),
+        })
+
+    return results
 
 
 def _parse_course_form(form):
@@ -382,7 +489,16 @@ def add_student(course_id):
                 return render_template('add_student.html', course=course, form=request.form)
             scores[field] = val
 
-        student = Student(course_id=course_id, name=name, **scores)
+        student_number = request.form.get('student_number', '').strip() or None
+        department = request.form.get('department', '').strip() or None
+
+        student = Student(
+            course_id=course_id,
+            name=name,
+            student_number=student_number,
+            department=department,
+            **scores,
+        )
         db.session.add(student)
         db.session.commit()
         recalculate_grades(course_id)
@@ -420,6 +536,8 @@ def edit_student(student_id):
             scores[field] = val
 
         student.name = name
+        student.student_number = request.form.get('student_number', '').strip() or None
+        student.department = request.form.get('department', '').strip() or None
         student.report_score = scores['report_score']
         student.attendance_score = scores['attendance_score']
         student.midterm_score = scores['midterm_score']
@@ -608,6 +726,140 @@ def import_excel(course_id):
 
 
 # ---------------------------------------------------------------------------
+# Routes — Roster (명단 관리)
+# ---------------------------------------------------------------------------
+
+@app.route('/course/<int:course_id>/upload_roster', methods=['GET', 'POST'])
+def upload_roster(course_id):
+    """Upload a class roster Excel file (.xls/.xlsx) and store into CourseRoster."""
+    course = Course.query.get_or_404(course_id)
+
+    if request.method == 'POST':
+        file = request.files.get('roster_file')
+        if not file or file.filename == '':
+            flash('파일을 선택해주세요.', 'error')
+            return render_template('upload_roster.html', course=course)
+
+        mode = request.form.get('mode', 'append')  # 'append' or 'replace'
+
+        try:
+            file_data = file.read()
+            entries = parse_roster_file(file_data, file.filename)
+        except ValueError as exc:
+            flash(str(exc), 'error')
+            return render_template('upload_roster.html', course=course)
+
+        if not entries:
+            flash('파일에 유효한 학생 데이터가 없습니다.', 'error')
+            return render_template('upload_roster.html', course=course)
+
+        if mode == 'replace':
+            CourseRoster.query.filter_by(course_id=course_id).delete(synchronize_session='fetch')
+
+        for entry in entries:
+            roster_entry = CourseRoster(
+                course_id=course_id,
+                department=entry['department'] or None,
+                name=entry['name'],
+                student_number=entry['student_number'] or None,
+            )
+            db.session.add(roster_entry)
+
+        db.session.commit()
+        flash(f'{len(entries)}명 명단 등록 완료', 'success')
+        return redirect(url_for('course_detail', course_id=course_id))
+
+    return render_template('upload_roster.html', course=course)
+
+
+@app.route('/course/<int:course_id>/clear_roster', methods=['POST'])
+def clear_roster(course_id):
+    """Delete all CourseRoster entries for the course."""
+    course = Course.query.get_or_404(course_id)
+    CourseRoster.query.filter_by(course_id=course_id).delete()
+    db.session.commit()
+    flash('명단이 초기화되었습니다.', 'success')
+    return redirect(url_for('course_detail', course_id=course_id))
+
+
+@app.route('/course/<int:course_id>/add_from_roster', methods=['GET', 'POST'])
+def add_from_roster(course_id):
+    """
+    GET  — Show roster table with client-side filter; optionally show score entry
+            form when ?roster_id=X is present.
+    POST — Save a new Student from the score entry form.
+    """
+    course = Course.query.get_or_404(course_id)
+
+    if request.method == 'POST':
+        # Collect pre-filled identity fields
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('학생 이름을 입력해주세요.', 'error')
+            roster_id = request.form.get('roster_id', '')
+            return redirect(url_for('add_from_roster', course_id=course_id, roster_id=roster_id))
+
+        student_number = request.form.get('student_number', '').strip() or None
+        department = request.form.get('department', '').strip() or None
+
+        score_fields = [
+            ('report_score',     '레포트'),
+            ('attendance_score', '출석'),
+            ('midterm_score',    '중간시험'),
+            ('final_score',      '기말시험'),
+        ]
+        scores = {}
+        for field, label in score_fields:
+            val, err = _parse_score(request.form.get(field, ''), label)
+            if err:
+                flash(err, 'error')
+                roster_id = request.form.get('roster_id', '')
+                return redirect(url_for('add_from_roster', course_id=course_id, roster_id=roster_id))
+            scores[field] = val
+
+        student = Student(
+            course_id=course_id,
+            name=name,
+            student_number=student_number,
+            department=department,
+            **scores,
+        )
+        db.session.add(student)
+        db.session.commit()
+        recalculate_grades(course_id)
+
+        flash(f'{name} 학생이 추가되었습니다.', 'success')
+        return redirect(url_for('course_detail', course_id=course_id))
+
+    # GET — load roster, optionally pre-select one entry
+    roster = CourseRoster.query.filter_by(course_id=course_id).order_by(
+        CourseRoster.department.asc(), CourseRoster.name.asc()
+    ).all()
+
+    selected_roster = None
+    roster_id = request.args.get('roster_id', '')
+    if roster_id:
+        try:
+            selected_roster = db.session.get(CourseRoster, int(roster_id))
+            # Only allow entries that belong to this course
+            if selected_roster and selected_roster.course_id != course_id:
+                selected_roster = None
+        except (ValueError, TypeError):
+            selected_roster = None
+
+    # Build unique department list for the filter dropdown
+    departments = sorted({r.department for r in roster if r.department})
+
+    return render_template(
+        'add_from_roster.html',
+        course=course,
+        roster=roster,
+        selected_roster=selected_roster,
+        departments=departments,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Routes — Statistics
 # ---------------------------------------------------------------------------
 
@@ -653,5 +905,10 @@ def statistics(course_id):
 
 if __name__ == '__main__':
     with app.app_context():
+        # NOTE (Step 2 upgrade): db.create_all() will NOT automatically add
+        # student_number / department columns to an existing 'student' table,
+        # nor will it create the new 'course_roster' table if the DB already
+        # exists from Step 1.
+        # If upgrading from Step 1, delete grade_management.db and restart.
         db.create_all()
     app.run(debug=True)

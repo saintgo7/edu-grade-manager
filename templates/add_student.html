@@ -19,11 +19,26 @@
         <div class="card">
             <div class="card-body">
                 <form method="POST">
-                    <div class="mb-4">
+                    <div class="mb-3">
                         <label for="name" class="form-label fw-bold">학생 이름 <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="name" name="name" required
                                value="{{ form.get('name', '') }}"
                                placeholder="홍길동">
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="student_number" class="form-label">학번 <small class="text-muted">(선택)</small></label>
+                            <input type="text" class="form-control" id="student_number" name="student_number"
+                                   value="{{ form.get('student_number', '') }}"
+                                   placeholder="예: 20231234">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="department" class="form-label">계열 <small class="text-muted">(선택)</small></label>
+                            <input type="text" class="form-control" id="department" name="department"
+                                   value="{{ form.get('department', '') }}"
+                                   placeholder="예: 공학계열">
+                        </div>
                     </div>
 
                     <div class="mb-3">

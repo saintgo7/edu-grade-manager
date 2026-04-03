@@ -1,5 +1,110 @@
 # ARCHITECT-BRIEF.md
 
+## Step 2 — 과목별 학생 명단 업로드 + 명단 기반 학생 추가
+
+### 작업 범위
+`app.py` 수정 + 템플릿 수정/신규 + `requirements.txt` 수정
+
+---
+
+### 신규 모델: CourseRoster
+
+```python
+class CourseRoster(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    department = db.Column(db.String(100))   # 계열
+    name = db.Column(db.String(100), nullable=False)  # 이름
+    student_number = db.Column(db.String(50))  # 학번
+    course = db.relationship('Course', backref=db.backref('roster', lazy=True, cascade='all, delete-orphan'))
+```
+
+### 기존 Student 모델에 필드 추가
+
+```python
+student_number = db.Column(db.String(50))   # 학번 (nullable — 명단 없이 추가 가능)
+department = db.Column(db.String(100))       # 계열 (nullable)
+```
+
+---
+
+### Excel 파싱 전략
+
+- `.xlsx` → openpyxl (기존)
+- `.xls` → xlrd
+- 확장자로 분기: `filename.endswith('.xls')` (not `.xlsx`) → xlrd 사용
+- **컬럼 헤더 이름으로 탐색** (위치 고정 안 함):
+  - 계열: `계열` 또는 `department`
+  - 이름: `이름` 또는 `name`
+  - 학번: `학번` 또는 `student_id` 또는 `student_number`
+- 1행 헤더 읽어서 컬럼 인덱스 매핑 후 2행부터 데이터 파싱
+- 이름이 비어있는 행은 스킵
+- Flag: xlrd는 `.xls`만, openpyxl은 `.xlsx`만 — 혼용 금지
+
+---
+
+### 신규/수정 라우트
+
+| Method | URL | 기능 |
+|--------|-----|------|
+| GET/POST | `/course/<id>/upload_roster` | 명단 Excel 업로드 → CourseRoster 저장 |
+| POST | `/course/<id>/clear_roster` | 명단 전체 삭제 (재업로드 전 초기화) |
+| GET/POST | `/course/<id>/add_from_roster` | 명단에서 학생 선택 → 점수 입력 → Student 저장 |
+
+- 기존 `/course/<id>/add_student` 는 유지 (명단 없이 직접 입력 경로)
+
+---
+
+### upload_roster 동작
+1. .xls/.xlsx 외 파일 → 즉시 에러 flash
+2. 헤더에서 계열/이름/학번 컬럼 인덱스 탐색 — 못 찾으면 에러 flash
+3. 기존 명단 유지 or 덮어쓰기 선택 (라디오 버튼: "추가" / "전체 교체")
+4. 저장 성공 시 flash("{N}명 명단 등록 완료")
+5. course_detail로 리다이렉트
+
+---
+
+### add_from_roster 동작
+- GET: 해당 과목의 CourseRoster 전체 목록 표시 (계열/이름/학번 테이블)
+  - 검색 필터: 계열 드롭다운 + 이름/학번 텍스트 검색 (JS 클라이언트 필터링)
+  - 각 행에 "추가" 버튼 → 해당 학생 선택
+- POST (학생 선택 후): 이름/학번/계열 pre-filled + 4개 점수 입력폼 표시
+  - 점수 입력 후 저장 → Student 생성 → recalculate_grades() → course_detail로 이동
+
+---
+
+### 수정할 템플릿
+
+| 파일 | 변경 내용 |
+|------|---------|
+| `course_detail.html` | "명단 업로드" 버튼 + "명단에서 추가" 버튼 추가. 명단 인원수 배지 표시 |
+| `add_student.html` | 학번/계열 필드 추가 (optional) |
+| `edit_student.html` | 학번/계열 필드 추가 (optional) |
+
+### 신규 템플릿
+
+| 파일 | 내용 |
+|------|------|
+| `upload_roster.html` | .xls/.xlsx 업로드 폼 + 추가/전체교체 라디오 |
+| `add_from_roster.html` | 명단 테이블 + 계열 필터 + 검색. 선택 시 점수 입력폼으로 전환 |
+
+---
+
+### requirements.txt 추가
+```
+xlrd
+```
+
+---
+
+### Flag
+- `db.create_all()` 는 기존 컬럼 추가를 자동으로 안 함 — `student_number`, `department` 컬럼은 `ALTER TABLE` 또는 DB 삭제 후 재생성 필요. Bob은 앱 시작 시 migration 없이 DB 삭제 안내 주석만 추가할 것 (Alembic 도입은 Step 3 이후로 연기)
+- 명단 업로드는 메모리 파싱 (디스크 저장 없음) — openpyxl: `io.BytesIO`, xlrd: `xlrd.open_workbook(file_contents=data)`
+- add_from_roster에서 JS 필터는 서버 요청 없이 클라이언트 사이드 (테이블 행 show/hide)
+- 기존 Student 레코드의 student_number/department는 NULL 허용 — 하위 호환
+
+---
+
 ## Step 1 — 성적 관리 시스템 전면 재설계
 
 ### 작업 범위

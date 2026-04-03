@@ -1,66 +1,71 @@
-# REVIEW-REQUEST — Step 1: Grade Management System Redesign
+# REVIEW-REQUEST — Step 2: 과목별 학생 명단 업로드 + 명단 기반 학생 추가
 
-**Ready for Review: YES**
-**Date**: 2026-04-03 (fixes applied 2026-04-03)
+**Date**: 2026-04-03
 **Builder**: Bob
+**Ready for Review**: YES
 
 ---
 
-## Files Submitted for Review
+## Review Fixes Applied (from REVIEW-FEEDBACK.md, 2026-04-03)
 
-### 1. `/home/blackpc/requirements.txt` (lines 1-3)
-Added `openpyxl` as the third dependency alongside the existing Flask and Flask-SQLAlchemy entries.
-
-### 2. `/home/blackpc/app.py` (lines 1-375)
-Full rewrite: defines three SQLAlchemy models (Course, GradePolicy, Student), two validation helpers (`_validate_weights`, `_validate_policy`), a shared form-parser (`_parse_course_form`), `calc_total_score`, `recalculate_grades`, and all 11 routes listed in the brief.
-
-### 3. `/home/blackpc/templates/base.html` (lines 1-80)
-Navbar trimmed to a single "과목 목록" link pointing to `url_for('index')`; added `{% block scripts %}` slot for per-page JS; added rank-badge CSS helpers used by course_detail.
-
-### 4. `/home/blackpc/templates/index.html` (lines 1-62)
-Course card grid showing year/semester, student count, 4 weight badges, and action buttons (학생 목록, 통계, 수정, 삭제 with confirm dialog).
-
-### 5. `/home/blackpc/templates/course_new.html` (lines 1-130)
-Three-section form (과목 정보, 가중치, 학점 구간) with live JS totals that flag invalid weight/policy sums in red before submission.
-
-### 6. `/home/blackpc/templates/course_edit.html` (lines 1-138)
-Identical form structure to course_new but pre-populated from the `course` and `policy` objects; shows a warning banner that recalculation will occur on save.
-
-### 7. `/home/blackpc/templates/course_detail.html` (lines 1-104)
-Student table showing rank (gold/silver/bronze badges for top 3), individual 4-score columns, weighted total, letter grade badge, plus edit/delete per row; header action bar with all bulk entry links.
-
-### 8. `/home/blackpc/templates/add_student.html` (lines 1-57)
-4-score form (레포트, 출석, 중간시험, 기말시험) scoped to the current course, with a weight-reminder banner below the inputs.
-
-### 9. `/home/blackpc/templates/edit_student.html` (lines 1-70)
-Same 4-score form as add_student, but pre-populated with the student's existing scores; displays current total, grade, and rank as a status reminder.
-
-### 10. `/home/blackpc/templates/bulk_add.html` (lines 1-120)
-Updated CSV format from 2-column to 5-column (이름,레포트,출석,중간,기말); live preview table validates each row client-side; course weight display in the help panel.
-
-### 11. `/home/blackpc/templates/import_excel.html` (lines 1-62)
-Excel .xlsx upload form with column-layout instructions (A=이름, B-E=scores) and weight reminder; delegates all parsing to the backend.
-
-### 12. `/home/blackpc/templates/statistics.html` (lines 1-133)
-Per-course stats page: 4-card summary row (students, avg, high, low), grade distribution progress bars, top-10 ranking table, and A/B-C/D-F group summary cards.
+| # | Location | Fix |
+|---|----------|-----|
+| 1 (Must) | `requirements.txt:4` | Pinned `xlrd` to `xlrd>=1.2.0,<2` — prevents xlrd 2.x install which dropped `.xls` support |
+| 2 (Should) | `app.py:260` | Added `math.isfinite(val)` guard in `_cell()` — corrupt/formula-error cells returning `inf`/`nan` now produce `''` instead of raising `OverflowError`/`ValueError` |
+| 3 (Should) | `app.py:751` | Added `synchronize_session='fetch'` to bulk DELETE in 전체교체 mode — keeps ORM session consistent with cascade declaration |
+| 4 (Should) | `templates/upload_roster.html:59–65` | Moved "명단 초기화" `<form>` outside the upload `<form>` — fixes invalid nested-form HTML that caused the inner submit to trigger the outer form |
 
 ---
 
-## Fixes Applied Since Last Review
+## Changed Files
 
-All six items from REVIEW-FEEDBACK.md have been addressed:
-
-| # | Severity | Location | Fix |
-|---|----------|----------|-----|
-| 1 | Must Fix | line 132-143 | F grade now assigned when `rank > named_total`; unreachable else branch removed |
-| 2 | Must Fix | line 474 | Parentheses added to CSV header-skip condition to fix operator precedence |
-| 3 | Must Fix | line 551-553 | Exception no longer exposed to user; `app.logger.exception` added for server log |
-| 4 | Should Fix | line 13 | SECRET_KEY reads from `os.environ.get()` with dev fallback |
-| 5 | Should Fix | line 95 | `Course.query.get()` replaced with `db.session.get(Course, ...)` |
-| 6 | Should Fix | line 336 | First `db.session.commit()` in course_edit replaced with `db.session.flush()` |
+### `/home/blackpc/requirements.txt` (line 4)
+Changed `xlrd` to `xlrd>=1.2.0,<2` to support parsing of legacy `.xls` Excel files without resolving to the incompatible xlrd 2.x.
 
 ---
 
-## Open Questions for Reviewer
+### `/home/blackpc/app.py`
 
-None — the brief was unambiguous on all points. All flags from the brief have been implemented.
+| Lines | Change |
+|-------|--------|
+| 7 | Added `import xlrd` at module level. |
+| 68–69 | Added `student_number` (String 50, nullable) and `department` (String 100, nullable) columns to the `Student` model. |
+| 83–96 | New `CourseRoster` model with `course_id` FK, `department`, `name`, `student_number`; back-populated onto `Course.roster` with cascade delete. |
+| 195–273 | New `parse_roster_file(file_data, filename)` helper — routes `.xlsx` to openpyxl and `.xls` to xlrd, detects columns by header name, normalises xlrd float student-IDs to int strings, raises `ValueError` with user-facing messages on all error paths. |
+| 486–495 | Updated `add_student` POST handler to read `student_number` and `department` from the form and pass them to the `Student` constructor. |
+| 532–534 | Updated `edit_student` POST handler to update `student.student_number` and `student.department` from the form. |
+| 726–766 | New `upload_roster` route (GET/POST) — reads the uploaded file via `parse_roster_file`, respects "추가"/"전체교체" mode radio, commits `CourseRoster` rows, flashes count, redirects to course detail. |
+| 769–776 | New `clear_roster` route (POST) — deletes all `CourseRoster` rows for the course. |
+| 779–853 | New `add_from_roster` route (GET/POST) — GET serves roster table + optional score form when `?roster_id=X` query param is present; POST creates a `Student` and calls `recalculate_grades`. |
+| 900–908 | Added upgrade comment near `db.create_all()` instructing operators to delete `grade_management.db` when upgrading from Step 1. |
+
+---
+
+### `/home/blackpc/templates/course_detail.html` (lines 18–42)
+Added "명단 업로드" button (always visible, with roster count badge when non-empty) and "명단에서 추가" button (shown only when `course.roster` is non-empty).
+
+---
+
+### `/home/blackpc/templates/add_student.html` (lines 22–38)
+Added optional 학번 and 계열 text inputs in a two-column row above the score fields.
+
+---
+
+### `/home/blackpc/templates/edit_student.html` (lines 22–38)
+Added optional 학번 and 계열 text inputs pre-populated from `student.student_number` / `student.department`.
+
+---
+
+### `/home/blackpc/templates/upload_roster.html` (new file, 74 lines)
+File upload form accepting `.xls`/`.xlsx` with 추가/전체교체 radio; shows current roster count and an inline "명단 초기화" button when roster exists.
+
+---
+
+### `/home/blackpc/templates/add_from_roster.html` (new file, 150 lines)
+Roster table (계열, 이름, 학번 columns, "선택" button per row); client-side JS filter (계열 dropdown + 이름/학번 text search via row show/hide, no server request); when `?roster_id=X` is in the URL, a pre-filled score entry form appears above the table.
+
+---
+
+## Open Questions
+
+None — brief was unambiguous.

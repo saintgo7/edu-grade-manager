@@ -1,18 +1,22 @@
-# Review Feedback — Step 1 (Re-review after fixes)
+# Review Feedback — Step 2
 Date: 2026-04-03
-Ready for Builder: YES
+Ready for Builder: NO
 
 ---
 
 ## Must Fix
 
-None.
+- **requirements.txt:4** — `xlrd` is unpinned. xlrd 2.0.0 (released 2020) dropped `.xls` support entirely. `pip install xlrd` on any modern machine resolves to 2.x, which cannot open `.xls` files at all. The xlrd path in `parse_roster_file` will fail on every fresh install. Fix: pin to `xlrd>=1.2.0,<2` in requirements.txt.
 
 ---
 
 ## Should Fix
 
-None.
+- **app.py:260** — The float-to-int conversion `val == int(val)` raises `OverflowError` or `ValueError` for `float('inf')` and `float('nan')`, which xlrd can produce for corrupt or formula-error cells. Add a `math.isfinite(val)` guard: `if isinstance(val, float) and math.isfinite(val) and val == int(val)`.
+
+- **app.py:751** — `CourseRoster.query.filter_by(course_id=course_id).delete()` issues a bulk SQL DELETE that bypasses SQLAlchemy's ORM-level cascade. `CourseRoster` has no child relationships today so there is no functional bug, but the pattern is inconsistent with the cascade declaration on the backref and will silently break if a child table is added later.
+
+- **templates/upload_roster.html:59–65** — The "명단 초기화" `<form>` is nested inside the outer upload `<form method="POST" enctype="multipart/form-data">`. Nested form elements are invalid HTML; browsers silently ignore the inner form and its submit button will submit the outer form instead of POSTing to `clear_roster`. Move the "명단 초기화" form element outside the upload form.
 
 ---
 
@@ -24,61 +28,12 @@ None.
 
 ## Cleared
 
-All six items from the previous review have been verified correct in `/home/blackpc/app.py`.
-
-**Fix 1 — F grade logic (lines 132–143)**
-Verified. `named_total = sum(counts)` is computed once before the loop. The `while`
-loop advances `idx` through grade buckets using cumulative counts. The condition
-`rank > named_total` correctly assigns 'F' to any student whose rank exceeds the total
-number of named-grade slots.
-
-Edge case analysis:
-- All students pass (policy bands sum to 100%): `math.ceil` rounding may produce
-  `named_total >= n`. Since rank maxes at `n`, `rank > named_total` is either never true
-  or only triggered when rounding genuinely under-allocates. When bands sum exactly to
-  100% and rounding over-allocates, `named_total > n` and no student receives 'F'.
-  Correct behaviour.
-- Boundary exact match (`rank == named_total`): condition is `rank > named_total`,
-  which is `False`. Student receives a letter grade, not 'F'. Correct.
-- All students fail (all bands set to 0%): `named_total == 0`, every rank is positive,
-  every student gets 'F'. Correct.
-- Zero-count intermediate bucket (e.g. A band = 0%): the `while` loop advances `idx`
-  past the empty bucket because cumulative does not change, landing on the next
-  non-zero label without skipping any student. Correct.
-
-**Fix 2 — CSV header-skip parentheses (line 474)**
-Verified. Condition now reads:
-`if i == 1 and (line.lower().startswith('이름') or line.lower().startswith('name')):`
-The `or` is parenthesised; operator precedence is correct. The `i == 1` guard applies
-to both branches. A student named "Namewoo Kim" on row 2+ will no longer be silently
-dropped.
-
-**Fix 3 — openpyxl exception handling (lines 551–553)**
-Verified. Raw `{e}` is gone. The `except` clause is bare (`except Exception:`),
-`app.logger.exception('Excel parse error')` logs the full traceback server-side, and
-the user-facing flash message is a fixed, safe Korean string with no exception detail.
-Information-disclosure risk eliminated.
-
-**Fix 4 — SECRET_KEY from environment (line 13)**
-Verified. `app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')`.
-Environment variable is respected in production; fallback is present for local dev only.
-
-**Fix 5 — `db.session.get()` replacement (line 95)**
-Verified. The single deprecated `Course.query.get()` call in `recalculate_grades` is
-now `db.session.get(Course, course_id)`. A full-file grep confirms zero remaining
-`.query.get(` calls. The `.query.get_or_404()` calls at lines 300, 310, 348, 363, 399,
-440, 457, 535, and 617 are a distinct Flask-SQLAlchemy convenience method, were not
-in scope for this fix, and are not flagged. If a SQLAlchemy 2.x migration is planned,
-Arch should log a follow-up task for those call sites.
-
-**Fix 6 — Double commit removed (lines 336–337)**
-Verified. The first `db.session.commit()` in `course_edit` is now `db.session.flush()`.
-The flush writes updated `course` and `policy` field values into the session transaction,
-making them visible to the subsequent `recalculate_grades()` call without committing.
-`recalculate_grades()` issues the single `db.session.commit()` at line 145, atomically
-committing course/policy updates and all recalculated student grades together.
-Single commit path confirmed. No double-write regression.
-
----
-
-Step 1 is clear.
+- `parse_roster_file()` — `.xlsx` path via `openpyxl`/`io.BytesIO` is correct. `.xls` path via `xlrd.open_workbook(file_contents=...)` is correct in intent (blocked only by the unversioned pin in Must Fix). Column detection is header-name based and position-independent. `ValueError` is raised with user-facing messages for wrong extension, missing name column, and empty file. Header-only files produce an empty list, caught by the route.
+- `upload_roster` route — "전체교체" mode deletes only `CourseRoster` rows filtered by `course_id` before inserting. `Student` records are on a separate relationship and are not touched. "추가" mode appends correctly. No raw exception surfaces to users.
+- `clear_roster` route — POST-only (`methods=['POST']`). Deletes only `CourseRoster` rows, not `Student` records. No raw exception surfaces to users.
+- `add_from_roster` GET — `roster_id` is validated as an integer and cross-checked against `course_id` to prevent cross-course access; falls back gracefully to `None` on bad input. Pre-fills name, student_number, and department from the selected roster entry. Correct.
+- `add_from_roster` POST — Creates `Student` with name/student_number/department from form; `recalculate_grades()` called after commit; score validation via `_parse_score` enforces 0–100 range; no raw exception surfaces to users. Correct.
+- `Student` model — `student_number` (String 50) and `department` (String 100) are nullable with no `NOT NULL` constraint. No breaking change to existing records. Correct.
+- Float student-ID normalisation — `str(int(val))` correctly converts `20230001.0` to `"20230001"` (subject to the `math.isfinite` caveat noted in Should Fix above).
+- JS client-side filter — AND logic is correct: `deptOk && queryOk`. Department dropdown does exact-match on `data-dept`. Text search matches `data-name` OR `data-num` (OR within the text criterion is correct behaviour — a user searching by name or by student number). Both filter criteria are combined with AND. Correct.
+- Cascade safety — `CourseRoster` cascade `all, delete-orphan` is on the `Course → CourseRoster` backref only. The `Course → Student` relationship is a separate backref. Deleting `CourseRoster` rows does not touch `Student` records.

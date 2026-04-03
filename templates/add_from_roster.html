@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}명단에서 학생 추가 - {{ course.name }} - 대학교 성적 관리 시스템{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+    <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-outline-secondary btn-sm me-3">
+        <i class="bi bi-arrow-left"></i>
+    </a>
+    <div>
+        <h4 class="mb-0"><i class="bi bi-person-lines-fill text-primary"></i> 명단에서 학생 추가</h4>
+        <small class="text-muted">{{ course.name }} — {{ course.year }}학년도 {{ course.semester }}</small>
+    </div>
+</div>
+
+{% if not roster %}
+<div class="text-center py-5">
+    <i class="bi bi-clipboard-x" style="font-size:4rem; color:#dee2e6;"></i>
+    <p class="mt-3 text-muted fs-5">등록된 명단이 없습니다.</p>
+    <a href="{{ url_for('upload_roster', course_id=course.id) }}" class="btn btn-warning mt-2">
+        <i class="bi bi-upload"></i> 명단 업로드
+    </a>
+</div>
+{% else %}
+
+<!-- Score entry form (shown when a roster entry is selected) -->
+{% if selected_roster %}
+<div class="card border-primary mb-4" id="score-form-card">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-pencil-square"></i> 점수 입력 — {{ selected_roster.name }}</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="roster_id" value="{{ selected_roster.id }}">
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">이름 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="name" required
+                           value="{{ selected_roster.name }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">학번</label>
+                    <input type="text" class="form-control" name="student_number"
+                           value="{{ selected_roster.student_number or '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">계열</label>
+                    <input type="text" class="form-control" name="department"
+                           value="{{ selected_roster.department or '' }}">
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                {% set score_fields = [
+                    ('report_score',     '레포트',   'bi-file-text-fill',     'text-info'),
+                    ('attendance_score', '출석',     'bi-calendar-check-fill','text-success'),
+                    ('midterm_score',    '중간시험', 'bi-pencil-square',       'text-warning'),
+                    ('final_score',      '기말시험', 'bi-trophy-fill',         'text-danger'),
+                ] %}
+                {% for field, label, icon, color in score_fields %}
+                <div class="col-md-3">
+                    <label for="{{ field }}" class="form-label">
+                        <i class="bi {{ icon }} {{ color }}"></i> {{ label }}
+                        <span class="text-danger">*</span>
+                    </label>
+                    <input type="number" class="form-control" id="{{ field }}" name="{{ field }}"
+                           min="0" max="100" step="0.1" required placeholder="0 ~ 100">
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="alert alert-light border mb-3">
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i>
+                    이 과목의 가중치:
+                    레포트 {{ course.report_weight | int }}% /
+                    출석 {{ course.attendance_weight | int }}% /
+                    중간시험 {{ course.midterm_weight | int }}% /
+                    기말시험 {{ course.final_weight | int }}%
+                </small>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('add_from_roster', course_id=course.id) }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> 취소
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle-fill"></i> 학생 추가
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- Roster table with client-side filter -->
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <h5 class="mb-0 me-3"><i class="bi bi-table"></i> 명단 ({{ roster | length }}명)</h5>
+
+            {% if departments %}
+            <select id="dept-filter" class="form-select form-select-sm" style="width:auto;">
+                <option value="">전체 계열</option>
+                {% for dept in departments %}
+                <option value="{{ dept }}">{{ dept }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+
+            <input type="text" id="name-filter" class="form-control form-control-sm"
+                   style="width:200px;" placeholder="이름 또는 학번 검색">
+
+            <span id="visible-count" class="text-muted small ms-2"></span>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="roster-table">
+                <thead>
+                    <tr>
+                        <th>계열</th>
+                        <th>이름</th>
+                        <th>학번</th>
+                        <th style="width:6rem;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in roster %}
+                    <tr class="roster-row"
+                        data-dept="{{ entry.department or '' }}"
+                        data-name="{{ entry.name }}"
+                        data-num="{{ entry.student_number or '' }}">
+                        <td>{{ entry.department or '—' }}</td>
+                        <td><strong>{{ entry.name }}</strong></td>
+                        <td>{{ entry.student_number or '—' }}</td>
+                        <td class="text-end">
+                            <a href="{{ url_for('add_from_roster', course_id=course.id, roster_id=entry.id) }}"
+                               class="btn btn-sm btn-outline-primary
+                               {% if selected_roster and selected_roster.id == entry.id %}active{% endif %}">
+                                선택
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const deptFilter = document.getElementById('dept-filter');
+    const nameFilter = document.getElementById('name-filter');
+    const rows = document.querySelectorAll('.roster-row');
+    const countEl = document.getElementById('visible-count');
+
+    function applyFilters() {
+        const dept = deptFilter ? deptFilter.value.trim().toLowerCase() : '';
+        const query = nameFilter ? nameFilter.value.trim().toLowerCase() : '';
+        let visible = 0;
+
+        rows.forEach(function (row) {
+            const rowDept = row.dataset.dept.toLowerCase();
+            const rowName = row.dataset.name.toLowerCase();
+            const rowNum  = row.dataset.num.toLowerCase();
+
+            const deptOk = !dept || rowDept === dept;
+            const queryOk = !query || rowName.includes(query) || rowNum.includes(query);
+
+            if (deptOk && queryOk) {
+                row.style.display = '';
+                visible++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        if (countEl) {
+            countEl.textContent = (dept || query) ? visible + '명 표시 중' : '';
+        }
+    }
+
+    if (deptFilter) deptFilter.addEventListener('change', applyFilters);
+    if (nameFilter) nameFilter.addEventListener('input', applyFilters);
+})();
+</script>
+{% endblock %}
