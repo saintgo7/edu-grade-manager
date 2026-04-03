@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}학생 추가 - {{ course.name }} - 대학교 성적 관리 시스템{% endblock %}
+{% block title %}학생 수정 - {{ student.name }} - 대학교 성적 관리 시스템{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -11,7 +11,7 @@
                 <i class="bi bi-arrow-left"></i>
             </a>
             <div>
-                <h4 class="mb-0"><i class="bi bi-person-plus-fill text-success"></i> 학생 추가</h4>
+                <h4 class="mb-0"><i class="bi bi-pencil-fill text-warning"></i> 학생 수정</h4>
                 <small class="text-muted">{{ course.name }} — {{ course.year }}학년도 {{ course.semester }}</small>
             </div>
         </div>
@@ -22,7 +22,7 @@
                     <div class="mb-4">
                         <label for="name" class="form-label fw-bold">학생 이름 <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="name" name="name" required
-                               value="{{ form.get('name', '') }}"
+                               value="{{ form.get('name', student.name) }}"
                                placeholder="홍길동">
                     </div>
 
@@ -32,12 +32,12 @@
 
                     <div class="row g-3 mb-4">
                         {% set score_fields = [
-                            ('report_score',     '레포트',   'bi-file-text-fill',     'text-info'),
-                            ('attendance_score', '출석',     'bi-calendar-check-fill','text-success'),
-                            ('midterm_score',    '중간시험', 'bi-pencil-square',       'text-warning'),
-                            ('final_score',      '기말시험', 'bi-trophy-fill',         'text-danger'),
+                            ('report_score',     '레포트',   'bi-file-text-fill',     'text-info',    student.report_score),
+                            ('attendance_score', '출석',     'bi-calendar-check-fill','text-success', student.attendance_score),
+                            ('midterm_score',    '중간시험', 'bi-pencil-square',       'text-warning', student.midterm_score),
+                            ('final_score',      '기말시험', 'bi-trophy-fill',         'text-danger',  student.final_score),
                         ] %}
-                        {% for field, label, icon, color in score_fields %}
+                        {% for field, label, icon, color, current in score_fields %}
                         <div class="col-md-6">
                             <label for="{{ field }}" class="form-label">
                                 <i class="bi {{ icon }} {{ color }}"></i> {{ label }}
@@ -45,7 +45,7 @@
                             </label>
                             <input type="number" class="form-control" id="{{ field }}" name="{{ field }}"
                                    min="0" max="100" step="0.1" required
-                                   value="{{ form.get(field, '') }}"
+                                   value="{{ form.get(field, current) }}"
                                    placeholder="0 ~ 100">
                         </div>
                         {% endfor %}
@@ -63,12 +63,22 @@
                         </small>
                     </div>
 
+                    {% if student.total_score is not none %}
+                    <div class="alert alert-secondary mb-4">
+                        <small>
+                            현재 총점: <strong>{{ "%.2f" | format(student.total_score) }}</strong> &nbsp;|&nbsp;
+                            현재 학점: <strong>{{ student.grade or 'F' }}</strong> &nbsp;|&nbsp;
+                            현재 순위: <strong>{{ student.rank }}위</strong>
+                        </small>
+                    </div>
+                    {% endif %}
+
                     <div class="d-flex justify-content-end gap-2">
                         <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-secondary">
                             <i class="bi bi-x-circle"></i> 취소
                         </a>
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-check-circle-fill"></i> 학생 추가
+                        <button type="submit" class="btn btn-warning">
+                            <i class="bi bi-check-circle-fill"></i> 저장 및 재계산
                         </button>
                     </div>
                 </form>

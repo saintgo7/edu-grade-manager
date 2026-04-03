@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Excel 가져오기 - {{ course.name }} - 대학교 성적 관리 시스템{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-outline-secondary btn-sm me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h4 class="mb-0"><i class="bi bi-file-earmark-excel-fill text-success"></i> Excel 가져오기</h4>
+                <small class="text-muted">{{ course.name }} — {{ course.year }}학년도 {{ course.semester }}</small>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <strong>.xlsx 파일 형식 안내</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>1행: 헤더 (자동으로 건너뜀)</li>
+                        <li>A열: 학생 이름</li>
+                        <li>B열: 레포트 점수 (0~100)</li>
+                        <li>C열: 출석 점수 (0~100)</li>
+                        <li>D열: 중간시험 점수 (0~100)</li>
+                        <li>E열: 기말시험 점수 (0~100)</li>
+                    </ul>
+                </div>
+
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-4">
+                        <label for="excel_file" class="form-label fw-bold">
+                            Excel 파일 선택 (.xlsx) <span class="text-danger">*</span>
+                        </label>
+                        <input type="file" class="form-control" id="excel_file" name="excel_file"
+                               accept=".xlsx" required>
+                        <div class="form-text">.xlsx 형식만 지원됩니다.</div>
+                    </div>
+
+                    <!-- Weight reminder -->
+                    <div class="card bg-light mb-4">
+                        <div class="card-body py-2">
+                            <small class="text-muted">
+                                <i class="bi bi-sliders"></i>
+                                이 과목 가중치:
+                                레포트 {{ course.report_weight | int }}% /
+                                출석 {{ course.attendance_weight | int }}% /
+                                중간시험 {{ course.midterm_weight | int }}% /
+                                기말시험 {{ course.final_weight | int }}%
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> 취소
+                        </a>
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-upload"></i> 가져오기
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

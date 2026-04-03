@@ -1,41 +1,49 @@
 {% extends "base.html" %}
 
-{% block title %}일괄 추가 - 대학교 성적 관리 시스템{% endblock %}
+{% block title %}CSV 일괄 추가 - {{ course.name }} - 대학교 성적 관리 시스템{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="mb-0"><i class="bi bi-people-fill"></i> 학생 일괄 추가</h4>
+    <div class="col-lg-8">
+
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-outline-secondary btn-sm me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h4 class="mb-0"><i class="bi bi-people-fill text-primary"></i> CSV 일괄 추가</h4>
+                <small class="text-muted">{{ course.name }} — {{ course.year }}학년도 {{ course.semester }}</small>
             </div>
+        </div>
+
+        <div class="card">
             <div class="card-body">
                 <div class="alert alert-info">
                     <i class="bi bi-info-circle-fill"></i>
-                    <strong>사용법:</strong> 각 줄에 "이름,점수" 형식으로 입력하세요. (예: 홍길동,85)
+                    <strong>형식:</strong> 각 줄에 <code>이름,레포트,출석,중간시험,기말시험</code> 순으로 입력하세요.<br>
+                    첫 번째 줄이 헤더(이름,레포트,...) 인 경우 자동으로 건너뜁니다.
                 </div>
-                
+
                 <form method="POST">
                     <div class="mb-3">
-                        <label for="students_data" class="form-label">학생 데이터 <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="students_data" name="students_data" 
-                                  rows="10" required 
-                                  placeholder="홍길동,85&#10;김영희,92&#10;이철수,78&#10;박지은,95"></textarea>
-                        <div class="form-text">
-                            각 줄에 한 명씩, "이름,점수" 형식으로 입력하세요.
-                        </div>
+                        <label for="students_data" class="form-label fw-bold">
+                            학생 데이터 <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control font-monospace" id="students_data" name="students_data"
+                                  rows="12" required
+                                  placeholder="홍길동,85,90,78,88&#10;김영희,92,100,95,91&#10;이철수,70,80,75,72"></textarea>
                     </div>
-                    
-                    <div class="row mb-3">
+
+                    <div class="row mb-4">
                         <div class="col-md-6">
                             <div class="card bg-light">
                                 <div class="card-body">
                                     <h6 class="card-title">입력 예시</h6>
-                                    <code>
-                                        홍길동,85<br>
-                                        김영희,92<br>
-                                        이철수,78<br>
-                                        박지은,95
+                                    <code class="small">
+                                        이름,레포트,출석,중간시험,기말시험<br>
+                                        홍길동,85,90,78,88<br>
+                                        김영희,92,100,95,91<br>
+                                        이철수,70,80,75,72
                                     </code>
                                 </div>
                             </div>
@@ -43,57 +51,46 @@
                         <div class="col-md-6">
                             <div class="card bg-light">
                                 <div class="card-body">
-                                    <h6 class="card-title">성적 기준표</h6>
-                                    <div class="row">
-                                        <div class="col-6">
-                                            <small>
-                                                <strong>A+:</strong> 95~100<br>
-                                                <strong>A:</strong> 90~94<br>
-                                                <strong>B+:</strong> 85~89<br>
-                                                <strong>B:</strong> 80~84<br>
-                                                <strong>C+:</strong> 75~79
-                                            </small>
-                                        </div>
-                                        <div class="col-6">
-                                            <small>
-                                                <strong>C:</strong> 70~74<br>
-                                                <strong>D+:</strong> 65~69<br>
-                                                <strong>D:</strong> 60~64<br>
-                                                <strong>F:</strong> 0~59
-                                            </small>
-                                        </div>
-                                    </div>
+                                    <h6 class="card-title">이 과목 가중치</h6>
+                                    <ul class="mb-0 small">
+                                        <li>레포트: <strong>{{ course.report_weight | int }}%</strong></li>
+                                        <li>출석: <strong>{{ course.attendance_weight | int }}%</strong></li>
+                                        <li>중간시험: <strong>{{ course.midterm_weight | int }}%</strong></li>
+                                        <li>기말시험: <strong>{{ course.final_weight | int }}%</strong></li>
+                                    </ul>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div id="preview" class="mb-3" style="display: none;">
+
+                    <!-- Preview area -->
+                    <div id="preview" class="mb-4" style="display:none;">
                         <h6>미리보기:</h6>
-                        <div id="preview-content" class="table-responsive">
-                            <table class="table table-sm">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
                                 <thead>
                                     <tr>
                                         <th>이름</th>
-                                        <th>점수</th>
-                                        <th>예상 등급</th>
+                                        <th class="text-end">레포트</th>
+                                        <th class="text-end">출석</th>
+                                        <th class="text-end">중간</th>
+                                        <th class="text-end">기말</th>
                                     </tr>
                                 </thead>
-                                <tbody id="preview-tbody">
-                                </tbody>
+                                <tbody id="preview-tbody"></tbody>
                             </table>
                         </div>
                     </div>
-                    
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="{{ url_for('index') }}" class="btn btn-secondary me-md-2">
-                            <i class="bi bi-arrow-left"></i> 취소
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> 취소
                         </a>
-                        <button type="button" class="btn btn-info me-md-2" onclick="previewData()">
+                        <button type="button" class="btn btn-outline-info" onclick="previewData()">
                             <i class="bi bi-eye"></i> 미리보기
                         </button>
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-check-lg"></i> 일괄 추가
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle-fill"></i> 일괄 추가
                         </button>
                     </div>
                 </form>
@@ -101,83 +98,55 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
-function getGrade(score) {
-    if (score >= 95) return "A+";
-    else if (score >= 90) return "A";
-    else if (score >= 85) return "B+";
-    else if (score >= 80) return "B";
-    else if (score >= 75) return "C+";
-    else if (score >= 70) return "C";
-    else if (score >= 65) return "D+";
-    else if (score >= 60) return "D";
-    else return "F";
-}
-
-function getBadgeClass(grade) {
-    if (grade.includes('A')) return 'success';
-    else if (grade.includes('B')) return 'primary';
-    else if (grade.includes('C')) return 'warning';
-    else if (grade.includes('D')) return 'secondary';
-    else return 'danger';
-}
-
 function previewData() {
-    const data = document.getElementById('students_data').value.trim();
-    const preview = document.getElementById('preview');
+    const raw = document.getElementById('students_data').value.trim();
+    if (!raw) { alert('데이터를 입력해주세요.'); return; }
+
+    const lines = raw.split('\n');
     const tbody = document.getElementById('preview-tbody');
-    
-    if (!data) {
-        alert('데이터를 입력해주세요.');
-        return;
-    }
-    
-    const lines = data.split('\n');
     tbody.innerHTML = '';
-    
     let validCount = 0;
-    
-    lines.forEach((line, index) => {
+
+    lines.forEach(function(line, idx) {
         line = line.trim();
         if (!line) return;
-        
-        const parts = line.split(',');
-        if (parts.length !== 2) {
-            tbody.innerHTML += `<tr class="table-danger"><td colspan="3">라인 ${index + 1}: 형식 오류 - ${line}</td></tr>`;
+
+        // skip header
+        if (idx === 0 && (line.toLowerCase().startsWith('이름') || line.toLowerCase().startsWith('name'))) return;
+
+        const parts = line.split(',').map(s => s.trim());
+        if (parts.length !== 5) {
+            tbody.innerHTML += `<tr class="table-danger"><td colspan="5">라인 ${idx+1}: 열이 5개여야 합니다 — ${line}</td></tr>`;
             return;
         }
-        
-        const name = parts[0].trim();
-        const scoreStr = parts[1].trim();
-        const score = parseFloat(scoreStr);
-        
-        if (!name) {
-            tbody.innerHTML += `<tr class="table-danger"><td colspan="3">라인 ${index + 1}: 이름이 비어있음</td></tr>`;
+
+        const name = parts[0];
+        const scores = parts.slice(1).map(Number);
+        const hasError = scores.some(s => isNaN(s) || s < 0 || s > 100);
+
+        if (!name || hasError) {
+            tbody.innerHTML += `<tr class="table-danger"><td colspan="5">라인 ${idx+1}: 오류 — ${line}</td></tr>`;
             return;
         }
-        
-        if (isNaN(score) || score < 0 || score > 100) {
-            tbody.innerHTML += `<tr class="table-danger"><td colspan="3">라인 ${index + 1}: 잘못된 점수 - ${scoreStr}</td></tr>`;
-            return;
-        }
-        
-        const grade = getGrade(score);
-        const badgeClass = getBadgeClass(grade);
-        
+
         tbody.innerHTML += `
             <tr class="table-success">
                 <td>${name}</td>
-                <td>${score}</td>
-                <td><span class="badge bg-${badgeClass}">${grade}</span></td>
-            </tr>
-        `;
+                <td class="text-end">${scores[0]}</td>
+                <td class="text-end">${scores[1]}</td>
+                <td class="text-end">${scores[2]}</td>
+                <td class="text-end">${scores[3]}</td>
+            </tr>`;
         validCount++;
     });
-    
+
     if (validCount > 0) {
-        preview.style.display = 'block';
-        tbody.innerHTML += `<tr class="table-info"><td colspan="3"><strong>총 ${validCount}명의 학생이 추가됩니다.</strong></td></tr>`;
+        tbody.innerHTML += `<tr class="table-info"><td colspan="5"><strong>총 ${validCount}명이 추가됩니다.</strong></td></tr>`;
+        document.getElementById('preview').style.display = 'block';
     } else {
         alert('유효한 데이터가 없습니다.');
     }
