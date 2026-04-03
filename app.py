@@ -801,7 +801,17 @@ def upload_roster(course_id):
 
         if mode == 'replace':
             CourseRoster.query.filter_by(course_id=course_id).delete(synchronize_session='fetch')
+            Student.query.filter_by(course_id=course_id).delete(synchronize_session='fetch')
 
+        # 기존 학번 목록 (중복 방지)
+        existing_numbers = {
+            s.student_number
+            for s in Student.query.filter_by(course_id=course_id).all()
+            if s.student_number
+        }
+
+        added_count = 0
+        skipped_count = 0
         for entry in entries:
             roster_entry = CourseRoster(
                 course_id=course_id,
@@ -811,9 +821,35 @@ def upload_roster(course_id):
             )
             db.session.add(roster_entry)
 
+            # 학번 중복이면 Student 추가 스킵
+            snum = entry['student_number'] or None
+            if snum and snum in existing_numbers:
+                skipped_count += 1
+                continue
+
+            student = Student(
+                course_id=course_id,
+                name=entry['name'],
+                student_number=snum,
+                department=entry['department'] or None,
+                report_score=0.0,
+                attendance_score=0.0,
+                midterm_score=0.0,
+                final_score=0.0,
+            )
+            db.session.add(student)
+            if snum:
+                existing_numbers.add(snum)
+            added_count += 1
+
         db.session.commit()
-        flash(f'{len(entries)}명 명단 등록 완료', 'success')
-        return redirect(url_for('add_from_roster', course_id=course_id))
+        recalculate_grades(course_id)
+
+        msg = f'{added_count}명 학생 추가 완료'
+        if skipped_count:
+            msg += f' ({skipped_count}명 중복 제외)'
+        flash(msg, 'success')
+        return redirect(url_for('course_detail', course_id=course_id))
 
     return render_template('upload_roster.html', course=course)
 
