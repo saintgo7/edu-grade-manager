@@ -2,6 +2,7 @@ import math
 import io
 import csv
 import os
+import re
 from datetime import datetime
 
 import xlrd
@@ -228,7 +229,63 @@ def parse_roster_file(file_data, filename):
     if not rows:
         raise ValueError('파일에 데이터가 없습니다.')
 
-    # Map header names to column indices
+    def _cell_val(val):
+        """Normalize a raw cell value to a clean string."""
+        if val is None:
+            return ''
+        if isinstance(val, float):
+            if not math.isfinite(val):
+                return ''
+            return str(int(val)) if val == int(val) else str(val)
+        return str(val).strip()
+
+    # ── 출석부 형식 감지 ──────────────────────────────────────────────
+    # 출석부는 컬럼 헤더가 없고, 학생 데이터가 2행 쌍으로 반복됨:
+    #   홀수 행: 계열 (예: "공학3계열")
+    #   짝수 행: 이름 (학번) (예: "강세종 (20263153)")
+    # A열(index 0) 에 "이름 (8자리 이상 숫자)" 패턴이 있으면 출석부로 판단.
+    ATTENDANCE_PATTERN = re.compile(r'^(.+?)\s*\((\d{6,})\)\s*$')
+
+    def _is_attendance_format(rows):
+        for row in rows:
+            if not row:
+                continue
+            cell = _cell_val(row[0])
+            if ATTENDANCE_PATTERN.match(cell):
+                return True
+        return False
+
+    if _is_attendance_format(rows):
+        # 출석부 파싱: A열만 사용, 2행 쌍 (계열 / 이름(학번)) 반복
+        results = []
+        dept_buf = ''
+        for row in rows:
+            if not row:
+                continue
+            cell = _cell_val(row[0])
+            if not cell:
+                continue
+            m = ATTENDANCE_PATTERN.match(cell)
+            if m:
+                # 이름(학번) 행
+                name = m.group(1).strip()
+                student_number = m.group(2).strip()
+                results.append({
+                    'department': dept_buf,
+                    'name': name,
+                    'student_number': student_number,
+                })
+                dept_buf = ''
+            else:
+                # 계열 행 (또는 헤더) — 다음 이름 행의 계열로 버퍼링
+                # 헤더 잡음("학과\n이름(학번)", "2026학년도..." 등)은 길이/패턴으로 필터
+                if len(cell) <= 30 and not any(k in cell for k in ('학년도', '출석부', '교과목', '담당', '수업', '학수', '서명', '주차', '분반')):
+                    dept_buf = cell
+        if not results:
+            raise ValueError('출석부에서 학생 데이터를 찾을 수 없습니다. 형식을 확인해주세요.')
+        return results
+
+    # ── 표준 형식: 헤더 컬럼 방식 ────────────────────────────────────
     header = [str(c).strip().lower() if c is not None else '' for c in rows[0]]
     dept_idx = name_idx = num_idx = None
     for i, h in enumerate(header):
@@ -242,34 +299,23 @@ def parse_roster_file(file_data, filename):
     if name_idx is None:
         raise ValueError(
             '헤더에서 이름 컬럼을 찾을 수 없습니다. '
-            '컬럼명이 "이름" 또는 "name"인지 확인해주세요.'
+            '"이름" 또는 "name" 컬럼이 있는지 확인해주세요. '
+            '출석부 파일은 "이름 (학번)" 형식(예: 홍길동 (20230001))으로 되어 있어야 합니다.'
         )
 
     results = []
     for row in rows[1:]:
-        # Skip entirely empty rows
         if all((c is None or str(c).strip() == '') for c in row):
             continue
+
         def _cell(idx):
             if idx is None or idx >= len(row):
                 return ''
-            val = row[idx]
-            if val is None:
-                return ''
-            # xlrd returns floats for numeric cells (e.g. student numbers)
-            if isinstance(val, float):
-                if not math.isfinite(val):
-                    str_val = ''
-                elif val == int(val):
-                    str_val = str(int(val))
-                else:
-                    str_val = str(val)
-                return str_val
-            return str(val).strip()
+            return _cell_val(row[idx])
 
         name = _cell(name_idx)
         if not name:
-            continue  # skip rows with empty name
+            continue
         results.append({
             'department': _cell(dept_idx),
             'name': name,
