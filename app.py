@@ -813,7 +813,7 @@ def upload_roster(course_id):
 
         db.session.commit()
         flash(f'{len(entries)}명 명단 등록 완료', 'success')
-        return redirect(url_for('course_detail', course_id=course_id))
+        return redirect(url_for('add_from_roster', course_id=course_id))
 
     return render_template('upload_roster.html', course=course)
 
