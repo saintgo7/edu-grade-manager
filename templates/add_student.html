@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}학생 추가 - 대학교 성적 관리 시스템{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-person-plus-fill"></i> 학생 추가</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">학생 이름 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="name" name="name" required 
+                               placeholder="학생 이름을 입력하세요">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="score" class="form-label">점수 (0-100) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="score" name="score" 
+                               min="0" max="100" step="0.1" required 
+                               placeholder="점수를 입력하세요">
+                        <div class="form-text">0점부터 100점까지 입력 가능합니다.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">성적 기준표</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small>
+                                            <strong>A+:</strong> 95~100<br>
+                                            <strong>A:</strong> 90~94<br>
+                                            <strong>B+:</strong> 85~89<br>
+                                            <strong>B:</strong> 80~84<br>
+                                            <strong>C+:</strong> 75~79
+                                        </small>
+                                    </div>
+                                    <div class="col-6">
+                                        <small>
+                                            <strong>C:</strong> 70~74<br>
+                                            <strong>D+:</strong> 65~69<br>
+                                            <strong>D:</strong> 60~64<br>
+                                            <strong>F:</strong> 0~59
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary me-md-2">
+                            <i class="bi bi-arrow-left"></i> 취소
+                        </a>
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-lg"></i> 학생 추가
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('score').addEventListener('input', function() {
+    const score = parseFloat(this.value);
+    const gradeDisplay = document.getElementById('grade-preview');
+    
+    if (!gradeDisplay) {
+        const gradeDiv = document.createElement('div');
+        gradeDiv.id = 'grade-preview';
+        gradeDiv.className = 'mt-2';
+        this.parentNode.appendChild(gradeDiv);
+    }
+    
+    if (!isNaN(score) && score >= 0 && score <= 100) {
+        let grade;
+        if (score >= 95) grade = "A+";
+        else if (score >= 90) grade = "A";
+        else if (score >= 85) grade = "B+";
+        else if (score >= 80) grade = "B";
+        else if (score >= 75) grade = "C+";
+        else if (score >= 70) grade = "C";
+        else if (score >= 65) grade = "D+";
+        else if (score >= 60) grade = "D";
+        else grade = "F";
+        
+        const badgeClass = grade.includes('A') ? 'success' : 
+                          grade.includes('B') ? 'primary' : 
+                          grade.includes('C') ? 'warning' : 
+                          grade.includes('D') ? 'secondary' : 'danger';
+        
+        document.getElementById('grade-preview').innerHTML = 
+            `<small class="text-muted">예상 등급: </small><span class="badge bg-${badgeClass}">${grade}</span>`;
+    } else {
+        document.getElementById('grade-preview').innerHTML = '';
+    }
+});
+</script>
+{% endblock %}

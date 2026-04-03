@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}통계 - 대학교 성적 관리 시스템{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="bi bi-bar-chart-fill"></i> 성적 통계 분석</h1>
+    </div>
+</div>
+
+{% if students %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stats-card bg-primary text-white">
+            <div class="stats-number">{{ stats.total_students }}</div>
+            <div>총 학생 수</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-success text-white">
+            <div class="stats-number">{{ stats.average_score }}</div>
+            <div>평균 점수</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-info text-white">
+            <div class="stats-number">{{ stats.highest_score }}</div>
+            <div>최고 점수</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-warning text-white">
+            <div class="stats-number">{{ stats.lowest_score }}</div>
+            <div>최저 점수</div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pie-chart-fill"></i> 등급별 분포</h5>
+            </div>
+            <div class="card-body">
+                {% set grade_order = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'F'] %}
+                {% for grade in grade_order %}
+                    {% if grade in stats.grade_distribution %}
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="badge bg-{% if grade in ['A+', 'A'] %}success{% elif grade in ['B+', 'B'] %}primary{% elif grade in ['C+', 'C'] %}warning{% elif grade in ['D+', 'D'] %}secondary{% else %}danger{% endif %} me-2">
+                                    {{ grade }}
+                                </span>
+                                <span>{{ stats.grade_distribution[grade] }}명 ({{ stats.grade_percentages[grade] }}%)</span>
+                            </div>
+                            <div class="progress" style="height: 25px;">
+                                <div class="progress-bar bg-{% if grade in ['A+', 'A'] %}success{% elif grade in ['B+', 'B'] %}primary{% elif grade in ['C+', 'C'] %}warning{% elif grade in ['D+', 'D'] %}secondary{% else %}danger{% endif %}" 
+                                     style="width: {{ stats.grade_percentages[grade] }}%">
+                                    {{ stats.grade_percentages[grade] }}%
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-trophy-fill"></i> 성적 순위</h5>
+            </div>
+            <div class="card-body">
+                {% set sorted_students = students|sort(attribute='score', reverse=true) %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>순위</th>
+                                <th>이름</th>
+                                <th>점수</th>
+                                <th>등급</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in sorted_students[:10] %}
+                            <tr>
+                                <td>
+                                    {% if loop.index == 1 %}
+                                        <i class="bi bi-trophy-fill text-warning"></i>
+                                    {% elif loop.index == 2 %}
+                                        <i class="bi bi-award-fill text-secondary"></i>
+                                    {% elif loop.index == 3 %}
+                                        <i class="bi bi-award-fill text-success"></i>
+                                    {% else %}
+                                        {{ loop.index }}
+                                    {% endif %}
+                                </td>
+                                <td><strong>{{ student.name }}</strong></td>
+                                <td>{{ student.score }}</td>
+                                <td>
+                                    <span class="badge bg-{% if student.grade in ['A+', 'A'] %}success{% elif student.grade in ['B+', 'B'] %}primary{% elif student.grade in ['C+', 'C'] %}warning{% elif student.grade in ['D+', 'D'] %}secondary{% else %}danger{% endif %}">
+                                        {{ student.grade }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% if students|length > 10 %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">
+                                    <small>... 그 외 {{ students|length - 10 }}명</small>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up"></i> 점수 분포 분석</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6>우수 학생 (A등급 이상)</h6>
+                                <div class="h3 text-success">
+                                    {{ (stats.grade_distribution.get('A+', 0) + stats.grade_distribution.get('A', 0)) }}명
+                                </div>
+                                <small class="text-muted">
+                                    전체의 {{ ((stats.grade_distribution.get('A+', 0) + stats.grade_distribution.get('A', 0)) / stats.total_students * 100)|round(1) }}%
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6>보통 학생 (B~C등급)</h6>
+                                <div class="h3 text-primary">
+                                    {{ (stats.grade_distribution.get('B+', 0) + stats.grade_distribution.get('B', 0) + stats.grade_distribution.get('C+', 0) + stats.grade_distribution.get('C', 0)) }}명
+                                </div>
+                                <small class="text-muted">
+                                    전체의 {{ ((stats.grade_distribution.get('B+', 0) + stats.grade_distribution.get('B', 0) + stats.grade_distribution.get('C+', 0) + stats.grade_distribution.get('C', 0)) / stats.total_students * 100)|round(1) }}%
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6>관심 필요 (D등급 이하)</h6>
+                                <div class="h3 text-danger">
+                                    {{ (stats.grade_distribution.get('D+', 0) + stats.grade_distribution.get('D', 0) + stats.grade_distribution.get('F', 0)) }}명
+                                </div>
+                                <small class="text-muted">
+                                    전체의 {{ ((stats.grade_distribution.get('D+', 0) + stats.grade_distribution.get('D', 0) + stats.grade_distribution.get('F', 0)) / stats.total_students * 100)|round(1) }}%
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="text-center py-5">
+    <div class="card">
+        <div class="card-body py-5">
+            <i class="bi bi-bar-chart display-1 text-muted"></i>
+            <h3 class="mt-3 text-muted">통계 데이터가 없습니다</h3>
+            <p class="text-muted">학생 데이터를 추가한 후 통계를 확인하세요.</p>
+            <a href="{{ url_for('add_student') }}" class="btn btn-success btn-lg">
+                <i class="bi bi-person-plus-fill"></i> 학생 추가하기
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">
+                <i class="bi bi-arrow-left"></i> 학생 목록으로 돌아가기
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+# ── 다른 프로젝트 디렉토리 (추적 제외) ──
+01_app-cursor/
+09_app_fire/
+21st/
+CascadeProjects/
+android-dev/
+app/
+app-student/
+counseling_system_python/
+cursor/
+data/
+eng-cal/
+engineering-calculator/
+fire-inspection-app/
+handoff/
+miniconda3/
+node_modules/
+
+# ── Python ──
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ── Database ──
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# ── 환경변수 ──
+.env
+.env.*
+
+# ── 로그 / 임시파일 ──
+*.log
+*.log.*
+session-ses_*.md
+npm-global-packages.txt
+package.json
+package-lock.json
+
+# ── IDE ──
+.idea/
+.vscode/
+.cursor/
+*.iml
+
+# ── OS ──
+.DS_Store
+Thumbs.db

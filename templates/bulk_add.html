@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}일괄 추가 - 대학교 성적 관리 시스템{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-people-fill"></i> 학생 일괄 추가</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <strong>사용법:</strong> 각 줄에 "이름,점수" 형식으로 입력하세요. (예: 홍길동,85)
+                </div>
+                
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="students_data" class="form-label">학생 데이터 <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="students_data" name="students_data" 
+                                  rows="10" required 
+                                  placeholder="홍길동,85&#10;김영희,92&#10;이철수,78&#10;박지은,95"></textarea>
+                        <div class="form-text">
+                            각 줄에 한 명씩, "이름,점수" 형식으로 입력하세요.
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title">입력 예시</h6>
+                                    <code>
+                                        홍길동,85<br>
+                                        김영희,92<br>
+                                        이철수,78<br>
+                                        박지은,95
+                                    </code>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title">성적 기준표</h6>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <small>
+                                                <strong>A+:</strong> 95~100<br>
+                                                <strong>A:</strong> 90~94<br>
+                                                <strong>B+:</strong> 85~89<br>
+                                                <strong>B:</strong> 80~84<br>
+                                                <strong>C+:</strong> 75~79
+                                            </small>
+                                        </div>
+                                        <div class="col-6">
+                                            <small>
+                                                <strong>C:</strong> 70~74<br>
+                                                <strong>D+:</strong> 65~69<br>
+                                                <strong>D:</strong> 60~64<br>
+                                                <strong>F:</strong> 0~59
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="preview" class="mb-3" style="display: none;">
+                        <h6>미리보기:</h6>
+                        <div id="preview-content" class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>이름</th>
+                                        <th>점수</th>
+                                        <th>예상 등급</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="preview-tbody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary me-md-2">
+                            <i class="bi bi-arrow-left"></i> 취소
+                        </a>
+                        <button type="button" class="btn btn-info me-md-2" onclick="previewData()">
+                            <i class="bi bi-eye"></i> 미리보기
+                        </button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-lg"></i> 일괄 추가
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function getGrade(score) {
+    if (score >= 95) return "A+";
+    else if (score >= 90) return "A";
+    else if (score >= 85) return "B+";
+    else if (score >= 80) return "B";
+    else if (score >= 75) return "C+";
+    else if (score >= 70) return "C";
+    else if (score >= 65) return "D+";
+    else if (score >= 60) return "D";
+    else return "F";
+}
+
+function getBadgeClass(grade) {
+    if (grade.includes('A')) return 'success';
+    else if (grade.includes('B')) return 'primary';
+    else if (grade.includes('C')) return 'warning';
+    else if (grade.includes('D')) return 'secondary';
+    else return 'danger';
+}
+
+function previewData() {
+    const data = document.getElementById('students_data').value.trim();
+    const preview = document.getElementById('preview');
+    const tbody = document.getElementById('preview-tbody');
+    
+    if (!data) {
+        alert('데이터를 입력해주세요.');
+        return;
+    }
+    
+    const lines = data.split('\n');
+    tbody.innerHTML = '';
+    
+    let validCount = 0;
+    
+    lines.forEach((line, index) => {
+        line = line.trim();
+        if (!line) return;
+        
+        const parts = line.split(',');
+        if (parts.length !== 2) {
+            tbody.innerHTML += `<tr class="table-danger"><td colspan="3">라인 ${index + 1}: 형식 오류 - ${line}</td></tr>`;
+            return;
+        }
+        
+        const name = parts[0].trim();
+        const scoreStr = parts[1].trim();
+        const score = parseFloat(scoreStr);
+        
+        if (!name) {
+            tbody.innerHTML += `<tr class="table-danger"><td colspan="3">라인 ${index + 1}: 이름이 비어있음</td></tr>`;
+            return;
+        }
+        
+        if (isNaN(score) || score < 0 || score > 100) {
+            tbody.innerHTML += `<tr class="table-danger"><td colspan="3">라인 ${index + 1}: 잘못된 점수 - ${scoreStr}</td></tr>`;
+            return;
+        }
+        
+        const grade = getGrade(score);
+        const badgeClass = getBadgeClass(grade);
+        
+        tbody.innerHTML += `
+            <tr class="table-success">
+                <td>${name}</td>
+                <td>${score}</td>
+                <td><span class="badge bg-${badgeClass}">${grade}</span></td>
+            </tr>
+        `;
+        validCount++;
+    });
+    
+    if (validCount > 0) {
+        preview.style.display = 'block';
+        tbody.innerHTML += `<tr class="table-info"><td colspan="3"><strong>총 ${validCount}명의 학생이 추가됩니다.</strong></td></tr>`;
+    } else {
+        alert('유효한 데이터가 없습니다.');
+    }
+}
+
+document.getElementById('students_data').addEventListener('input', function() {
+    document.getElementById('preview').style.display = 'none';
+});
+</script>
+{% endblock %}
